@@ -17,7 +17,7 @@ function onPick(template: string) {
 <template>
   <div class="syntax-panel">
     <h2 class="syntax-title">语法速查</h2>
-    <p class="syntax-lead">点击下方条目，会在光标处插入模板；图片也可直接 Ctrl+V。</p>
+    <p class="syntax-lead">点击条目在光标处插入模板；截图 Ctrl+V 会生成短行引用，长链接在文末。</p>
     <ul class="syntax-list">
       <li v-for="item in SYNTAX_SNIPPETS" :key="item.title" class="syntax-item">
         <button type="button" class="syntax-btn" @click="onPick(item.template)">
@@ -64,22 +64,27 @@ function onPick(template: string) {
 .syntax-btn {
   width: 100%;
   text-align: left;
-  padding: 0.45rem 0.55rem;
-  border-radius: 0.375rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--app-radius-sm);
   border: 1px solid var(--app-border);
-  background: var(--app-surface-2);
+  background: var(--app-surface);
   color: inherit;
   cursor: pointer;
   font: inherit;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  gap: 0.2rem;
+  box-shadow: var(--app-shadow);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .syntax-btn:hover {
   background: var(--app-surface-hover);
-  border-color: var(--app-accent);
+  border-color: color-mix(in srgb, var(--app-accent) 40%, var(--app-border));
+  box-shadow: var(--app-shadow-md);
 }
 
 .syntax-btn-title {

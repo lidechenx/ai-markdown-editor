@@ -20,6 +20,13 @@ describe('renderMarkdownToHtml', () => {
     expect(html).toContain('rel="noopener noreferrer"')
   })
 
+  it('支持引用式图片', () => {
+    const md = '![示例][img1]\n\n[img1]: https://example.com/p.png'
+    const html = renderMarkdownToHtml(md)
+    expect(html).toContain('<img')
+    expect(html).toContain('example.com')
+  })
+
   it('默认不执行内联 HTML', () => {
     const html = renderMarkdownToHtml('<script>alert(1)</script>')
     expect(html).not.toContain('<script>')

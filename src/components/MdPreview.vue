@@ -19,6 +19,8 @@ const html = computed(() => renderMarkdownToHtml(props.source))
 
 <style scoped>
 .preview-scroll {
+  flex: 1;
+  min-height: 0;
   height: 100%;
   overflow: auto;
   box-sizing: border-box;
@@ -30,6 +32,7 @@ const html = computed(() => renderMarkdownToHtml(props.source))
   margin: 0 auto;
   min-height: 100%;
   box-sizing: border-box;
+  border-radius: 0 0 var(--app-radius-sm) var(--app-radius-sm);
 }
 
 @media (prefers-color-scheme: dark) {

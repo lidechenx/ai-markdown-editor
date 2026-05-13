@@ -4,12 +4,13 @@ import { onMounted, ref } from 'vue'
 import CodeMirror from 'vue-codemirror6'
 import type { CodeMirrorExposed } from 'vue-codemirror6'
 import { imagePasteDropExtension } from '../editor/imagePasteDrop'
+import { dataUrlImagePreviewExtension } from '../editor/dataUrlImagePreview'
 
 const model = defineModel<string>({ required: true })
 
 const cmRef = ref<CodeMirrorExposed | null>(null)
 
-const extensions = [imagePasteDropExtension()]
+const extensions = [imagePasteDropExtension(), dataUrlImagePreviewExtension()]
 
 /** Markdown 语言支持（单例，避免在模板中重复调用工厂） */
 const markdownLang = markdown()
@@ -80,9 +81,17 @@ onMounted(() => {
 }
 
 .md-editor-wrap :deep(.cm-editor) {
+  display: flex;
+  flex-direction: column;
   height: 100%;
-  min-height: 320px;
+  min-height: 0;
   font-size: 14px;
+}
+
+.md-editor-wrap :deep(.cm-scroller) {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .md-editor-cm {

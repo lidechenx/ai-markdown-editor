@@ -1,5 +1,11 @@
 import { EditorView } from '@codemirror/view'
 
+/** 引用标签前缀，仅含字母数字与连字符，避免与正文脚注冲突 */
+const IMAGE_REF_ID_PREFIX = 'md-img'
+
+/** 图片说明文字最大长度（避免过长文件名撑爆一行） */
+const IMAGE_ALT_MAX_LEN = 48
+
 /**
  * 将图片文件读取为 Data URL。
  */
@@ -15,7 +21,17 @@ function readFileAsDataUrl(file: File): Promise<string> {
 }
 
 /**
- * 在指定位置插入多张图片对应的 Markdown 语法。
+ * 生成唯一的引用式图片 ID（用于 `![alt][id]` / `[id]: url`）。
+ */
+function makeImageRefId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return `${IMAGE_REF_ID_PREFIX}-${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`
+  }
+  return `${IMAGE_REF_ID_PREFIX}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+}
+
+/**
+ * 在光标处插入引用式图片（正文仅短行），Data URL 追加在文档末尾。
  */
 async function insertMarkdownImages(
   view: EditorView,
@@ -23,18 +39,29 @@ async function insertMarkdownImages(
   insertPos: number,
 ): Promise<void> {
   if (!files.length) return
-  const chunks: string[] = []
+
+  let cursor = insertPos
+
   for (const file of files) {
     const dataUrl = await readFileAsDataUrl(file)
-    const alt = (file.name || 'image').replace(/]/g, '')
-    chunks.push(`\n![${alt}](${dataUrl})\n`)
+    const rawAlt = (file.name || 'image').replace(/]/g, '')
+    const alt = rawAlt.length > IMAGE_ALT_MAX_LEN ? `${rawAlt.slice(0, IMAGE_ALT_MAX_LEN)}…` : rawAlt
+    const ref = makeImageRefId()
+    const inline = `\n![${alt}][${ref}]\n`
+
+    view.dispatch({
+      changes: { from: cursor, insert: inline },
+      selection: { anchor: cursor + inline.length },
+      scrollIntoView: true,
+    })
+
+    const appendAt = view.state.doc.length
+    view.dispatch({
+      changes: { from: appendAt, insert: `\n[${ref}]: ${dataUrl}\n` },
+    })
+
+    cursor += inline.length
   }
-  const md = chunks.join('')
-  view.dispatch({
-    changes: { from: insertPos, insert: md },
-    selection: { anchor: insertPos + md.length },
-    scrollIntoView: true,
-  })
 }
 
 /**
