@@ -75,6 +75,21 @@ function insertRefImageAt(view: EditorView, insertPos: number, dataUrl: string, 
 }
 
 /**
+ * 同一次粘贴中，剪贴板可能多次提供同一截图（等价 File），去重后再插入，避免正文/文末重复多段相同引用。
+ */
+export function dedupeImageFilesForPaste(files: File[]): File[] {
+  const out: File[] = []
+  const seen = new Set<string>()
+  for (const f of files) {
+    const key = `${f.name}\0${f.size}\0${f.lastModified}\0${f.type}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(f)
+  }
+  return out
+}
+
+/**
  * 将多个图片文件依次插入为引用式 Markdown。
  */
 async function insertMarkdownImages(
@@ -82,10 +97,11 @@ async function insertMarkdownImages(
   files: File[],
   insertPos: number,
 ): Promise<void> {
-  if (!files.length) return
+  const unique = dedupeImageFilesForPaste(files)
+  if (!unique.length) return
 
   let cursor = clampDocPos(view, insertPos)
-  for (const file of files) {
+  for (const file of unique) {
     const dataUrl = await readFileAsDataUrl(file)
     cursor = clampDocPos(view, cursor)
     cursor = insertRefImageAt(view, cursor, dataUrl, file.name || 'image')
@@ -102,9 +118,12 @@ export function imagePasteDropExtension() {
       const cb = event.clipboardData
       if (!cb) return false
 
-      const fromFiles = cb.files?.length ? [...cb.files].filter((f) => f.type.startsWith('image/')) : []
+      const fromFiles = dedupeImageFilesForPaste(
+        cb.files?.length ? [...cb.files].filter((f) => f.type.startsWith('image/')) : [],
+      )
       if (fromFiles.length) {
         event.preventDefault()
+        event.stopImmediatePropagation()
         const pos = clampDocPos(view, view.state.selection.main.head)
         void insertMarkdownImages(view, fromFiles, pos)
         return true
@@ -118,10 +137,12 @@ export function imagePasteDropExtension() {
             if (f) imageFiles.push(f)
           }
         }
-        if (imageFiles.length) {
+        const uniqueItems = dedupeImageFilesForPaste(imageFiles)
+        if (uniqueItems.length) {
           event.preventDefault()
+          event.stopImmediatePropagation()
           const pos = clampDocPos(view, view.state.selection.main.head)
-          void insertMarkdownImages(view, imageFiles, pos)
+          void insertMarkdownImages(view, uniqueItems, pos)
           return true
         }
       }
@@ -142,6 +163,7 @@ export function imagePasteDropExtension() {
             const altMatch = /\balt\s*=\s*["']([^"']*)["']/i.exec(tag[0])
             const altFromHtml = altMatch?.[1]?.replace(/]/g, '')?.trim()
             event.preventDefault()
+            event.stopImmediatePropagation()
             const pos = clampDocPos(view, view.state.selection.main.head)
             insertRefImageAt(view, pos, src, altFromHtml || 'image')
             return true
@@ -161,9 +183,10 @@ export function imagePasteDropExtension() {
     drop(event, view) {
       const dt = event.dataTransfer
       if (!dt?.files?.length) return false
-      const imgs = [...dt.files].filter((f) => f.type.startsWith('image/'))
+      const imgs = dedupeImageFilesForPaste([...dt.files].filter((f) => f.type.startsWith('image/')))
       if (!imgs.length) return false
       event.preventDefault()
+      event.stopImmediatePropagation()
       const rawPos =
         view.posAtCoords({ x: event.clientX, y: event.clientY }, false) ?? view.state.selection.main.head
       const pos = clampDocPos(view, rawPos)
