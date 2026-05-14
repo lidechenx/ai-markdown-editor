@@ -48,7 +48,8 @@ function collectImageRefDefinitions(doc: Text): Map<string, string> {
 }
 
 /**
- * 扫描文档中需要用图片预览替换的 Markdown 片段（行内 data/blob、引用式图片、文末定义行）。
+ * 扫描文档中需要用图片预览替换的 Markdown 片段（行内 data/blob、引用式 `![alt][id]`）。
+ * 文末 `[id]: <data:...>` 定义行不参与装饰：否则与上一行的 `![alt][id]` 会各显示一张相同缩略图。
  */
 export function scanDataUrlImageRanges(doc: Text): DataUrlImageRange[] {
   const refDefs = collectImageRefDefinitions(doc)
@@ -59,16 +60,8 @@ export function scanDataUrlImageRanges(doc: Text): DataUrlImageRange[] {
     const text = line.text
     const trimmed = text.replace(/\s+$/, '')
 
-    const defMatch = REF_DEF_LINE.exec(trimmed)
-    if (defMatch) {
-      const src = (defMatch[2] ?? defMatch[3] ?? '').trim()
-      out.push({
-        from: line.from,
-        to: line.to,
-        src,
-        alt: defMatch[1],
-        block: true,
-      })
+    /** 定义行仅用于 refDefs，不生成 replace 装饰（避免与 `![alt][id]` 重复预览） */
+    if (REF_DEF_LINE.exec(trimmed)) {
       continue
     }
 
