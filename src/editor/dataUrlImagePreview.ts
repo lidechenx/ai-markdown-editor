@@ -11,48 +11,30 @@ import {
 /** 超过此长度的文档不再扫描装饰，避免卡顿 */
 const MAX_DOC_LENGTH_FOR_IMAGE_PREVIEW = 600_000
 
-/** 行首引用定义：`[id]: data:...`、`[id]: <data:...>` 或 blob 形式（整行） */
-const REF_DEF_LINE =
-  /^\[([^\]]+)\]:\s*(?:<((?:data|blob):[^>\n]+)>|((?:data|blob):.+))$/
-
 /** 行内图片：`![](data:...)` 或 `![](blob:...)` */
 const INLINE_DATA_IMAGE = /!\[([^\]]*)\]\(((?:data|blob):[^)]+)\)/g
-
-/** 引用式图片：`![任意文字][引用id]`（id 对应文末 data/blob 定义） */
-const REF_STYLE_IMAGE = /!\[([^\]]*)\]\[([^\]]+)\]/g
 
 export type DataUrlImageRange = {
   from: number
   to: number
   src: string
   alt: string
-  /** 是否为整行引用定义（仅影响 DOM/CSS，装饰器本身不可为 block，见 ViewPlugin 限制） */
+  /** 保留字段，当前扫描结果均为行内缩略图 */
   block: boolean
 }
 
 /**
- * 收集全文中的 `[id]: data:...` / `[id]: blob:...` 定义，供引用式图片 `![alt][id]` 解析。
+ * 行首为 `[id]: <data:...>` 的整行（引用定义），通常极长；跳过扫描以减轻正则压力。
  */
-function collectImageRefDefinitions(doc: Text): Map<string, string> {
-  const map = new Map<string, string>()
-  for (let i = 1; i <= doc.lines; i++) {
-    const raw = doc.line(i).text
-    const t = raw.replace(/\s+$/, '')
-    const m = REF_DEF_LINE.exec(t)
-    if (m) {
-      const url = (m[2] ?? m[3] ?? '').trim()
-      map.set(m[1], url)
-    }
-  }
-  return map
+function isImageRefDefinitionLine(trimmed: string): boolean {
+  return /^\[[^\]]+\]:\s*(?:<(?:data|blob):|(?:data|blob):)/.test(trimmed)
 }
 
 /**
- * 扫描文档中需要用图片预览替换的 Markdown 片段（行内 data/blob、引用式 `![alt][id]`）。
- * 文末 `[id]: <data:...>` 定义行不参与装饰：否则与上一行的 `![alt][id]` 会各显示一张相同缩略图。
+ * 扫描文档中需用缩略图替换的片段：仅 **行内** `![](data:|blob:...)`。
+ * 引用式 `![alt][id]` + 文末 `[id]: <data:...>` 不在此装饰：避免原文出现「缩略图 + 长定义」的双重视觉，图片以左侧预览为准。
  */
 export function scanDataUrlImageRanges(doc: Text): DataUrlImageRange[] {
-  const refDefs = collectImageRefDefinitions(doc)
   const out: DataUrlImageRange[] = []
 
   for (let i = 1; i <= doc.lines; i++) {
@@ -60,8 +42,7 @@ export function scanDataUrlImageRanges(doc: Text): DataUrlImageRange[] {
     const text = line.text
     const trimmed = text.replace(/\s+$/, '')
 
-    /** 定义行仅用于 refDefs，不生成 replace 装饰（避免与 `![alt][id]` 重复预览） */
-    if (REF_DEF_LINE.exec(trimmed)) {
+    if (isImageRefDefinitionLine(trimmed)) {
       continue
     }
 
@@ -75,21 +56,6 @@ export function scanDataUrlImageRanges(doc: Text): DataUrlImageRange[] {
         alt: m[1] ?? '',
         block: false,
       })
-    }
-
-    const refImgRe = new RegExp(REF_STYLE_IMAGE.source, 'g')
-    while ((m = refImgRe.exec(text)) !== null) {
-      const id = m[2]
-      const url = refDefs.get(id)
-      if (url && (url.startsWith('data:') || url.startsWith('blob:'))) {
-        out.push({
-          from: line.from + m.index,
-          to: line.from + m.index + m[0].length,
-          src: url,
-          alt: m[1] ?? '',
-          block: false,
-        })
-      }
     }
   }
 
@@ -167,7 +133,7 @@ function buildDecorationSet(view: EditorView): DecorationSet {
 }
 
 /**
- * CodeMirror 扩展：在原文区将 data/blob 图片 Markdown 渲染为缩略图，底层文本不变。
+ * CodeMirror 扩展：在原文区将 **行内** `![](data:|blob:...)` 渲染为缩略图；引用式粘贴不在此装饰，请看左侧预览。
  */
 export function dataUrlImagePreviewExtension() {
   return ViewPlugin.fromClass(

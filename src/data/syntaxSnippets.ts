@@ -58,7 +58,7 @@ export const SYNTAX_SNIPPETS: SyntaxSnippet[] = [
   },
   {
     title: '图片（网络地址）',
-    hint: '粘贴截图由编辑器生成引用式；也可手写行内 ![](url)',
+    hint: '粘贴截图会插入引用式（短行 + 文末定义）；图片在左侧预览中查看',
     template: '\n![说明文字](https://example.com/image.png)\n\n',
   },
   {

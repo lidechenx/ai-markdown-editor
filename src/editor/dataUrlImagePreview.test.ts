@@ -37,7 +37,7 @@ describe('scanDataUrlImageRanges', () => {
     expect(ranges[0].from).toBeLessThan(ranges[1].from)
   })
 
-  it('引用式 ![alt][id] 与行内图可识别（文末定义行不单独装饰）', () => {
+  it('引用式 ![alt][id] 不在原文生成装饰（仅预览区渲染图）', () => {
     const doc = docFromLines(
       '![图][ref]',
       '',
@@ -45,9 +45,9 @@ describe('scanDataUrlImageRanges', () => {
       '![](data:image/png;base64,YYYY)',
     )
     const ranges = scanDataUrlImageRanges(doc)
-    expect(ranges).toHaveLength(2)
-    expect(ranges[0].alt).toBe('图')
-    expect(ranges[1].alt).toBe('')
+    expect(ranges).toHaveLength(1)
+    expect(ranges[0].alt).toBe('')
+    expect(ranges[0].src).toContain('YYYY')
   })
 
   it('普通网络图片行不生成装饰区间', () => {
@@ -55,12 +55,9 @@ describe('scanDataUrlImageRanges', () => {
     expect(scanDataUrlImageRanges(doc)).toHaveLength(0)
   })
 
-  it('尖括号定义行只供解析引用式图，不单独生成装饰区间', () => {
+  it('引用式 + 尖括号定义不产生装饰区间', () => {
     const doc = docFromLines('![图][ref]', '', '[ref]: <data:image/png;base64,XXXX>')
-    const ranges = scanDataUrlImageRanges(doc)
-    expect(ranges).toHaveLength(1)
-    expect(ranges[0].alt).toBe('图')
-    expect(ranges[0].src).toBe('data:image/png;base64,XXXX')
+    expect(scanDataUrlImageRanges(doc)).toHaveLength(0)
   })
 
   it('普通链接定义行不生成装饰区间', () => {
