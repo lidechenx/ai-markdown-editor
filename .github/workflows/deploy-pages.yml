@@ -1,3 +1,10 @@
+# 部署到 GitHub Pages（Actions）
+#
+# 若 deploy 报 404 / Failed to create deployment：
+# 1. 打开 https://github.com/lidechenx/ai-markdown-editor/settings/pages
+# 2. Build and deployment → Source 选「GitHub Actions」（不要选 Deploy from a branch）
+# 3. 保存后：Actions → 本 workflow → Run workflow，或向 main 再 push 一次
+
 name: Deploy to GitHub Pages
 
 on:
@@ -12,19 +19,19 @@ permissions:
 
 concurrency:
   group: github-pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -33,7 +40,8 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Upload artifact
+      # 与官方 static Pages 模板一致：upload v3 + deploy v5
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
@@ -47,4 +55,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
