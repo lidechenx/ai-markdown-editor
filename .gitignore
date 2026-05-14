@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# 本地规划类文档（刻意不纳入版本库，便于写长期设想而不污染远程）
+docs/*.local.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
