@@ -41,8 +41,11 @@ const html = computed(() => renderMarkdownToHtml(props.source))
 }
 
 .md-preview-inner :deep(img) {
-  max-width: 100%;
+  max-width: min(100%, 720px);
+  max-height: 70vh;
+  width: auto;
   height: auto;
+  object-fit: contain;
   display: inline-block;
   vertical-align: middle;
   border-radius: 8px;

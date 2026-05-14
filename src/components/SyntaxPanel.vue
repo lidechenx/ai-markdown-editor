@@ -17,7 +17,7 @@ function onPick(template: string) {
 <template>
   <div class="syntax-panel">
     <h2 class="syntax-title">语法速查</h2>
-    <p class="syntax-lead">点击条目在光标处插入模板；截图 Ctrl+V 会生成短行引用，长链接在文末。</p>
+    <p class="syntax-lead">点击条目在光标处插入模板；截图 Ctrl+V 会插入单行内嵌图，在左侧预览中查看。</p>
     <ul class="syntax-list">
       <li v-for="item in SYNTAX_SNIPPETS" :key="item.title" class="syntax-item">
         <button type="button" class="syntax-btn" @click="onPick(item.template)">

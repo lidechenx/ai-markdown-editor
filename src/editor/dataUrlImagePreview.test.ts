@@ -7,25 +7,45 @@ function docFromLines(...lines: string[]) {
 }
 
 describe('scanDataUrlImageRanges', () => {
-  it('仅有引用定义行时不生成装饰（避免与 ![alt][id] 重复缩略图）', () => {
+  it('引用定义整行仅产生折叠区间（不携带 src，避免再画缩略图）', () => {
     const doc = docFromLines('正文', '', '[r1]: data:image/png;base64,AAAABBBB')
-    expect(scanDataUrlImageRanges(doc)).toHaveLength(0)
+    const ranges = scanDataUrlImageRanges(doc)
+    expect(ranges).toHaveLength(1)
+    expect(ranges[0].kind).toBe('refStyleDefinition')
+    if (ranges[0].kind === 'refStyleDefinition') {
+      expect(ranges[0].refId).toBe('r1')
+    }
   })
 
   it('识别行内 ![](data:image...)', () => {
     const doc = docFromLines('请看 ![](data:image/jpeg;base64,/9j/4AAQ) 结束')
     const ranges = scanDataUrlImageRanges(doc)
     expect(ranges).toHaveLength(1)
-    expect(ranges[0].block).toBe(false)
-    expect(ranges[0].alt).toBe('')
-    expect(ranges[0].src.startsWith('data:image/jpeg')).toBe(true)
+    expect(ranges[0].kind).toBe('inlineDataUrl')
+    if (ranges[0].kind === 'inlineDataUrl') {
+      expect(ranges[0].alt).toBe('')
+      expect(ranges[0].src.startsWith('data:image/jpeg')).toBe(true)
+    }
+  })
+
+  it('识别行内 ![](<data:image...>) 尖括号包裹地址', () => {
+    const doc = docFromLines('![](<data:image/png;base64,QQ>)')
+    const ranges = scanDataUrlImageRanges(doc)
+    expect(ranges).toHaveLength(1)
+    expect(ranges[0].kind).toBe('inlineDataUrl')
+    if (ranges[0].kind === 'inlineDataUrl') {
+      expect(ranges[0].src).toBe('data:image/png;base64,QQ')
+    }
   })
 
   it('识别 blob: 行内图片', () => {
     const doc = docFromLines('![](blob:http://localhost/x-y-z)')
     const ranges = scanDataUrlImageRanges(doc)
     expect(ranges).toHaveLength(1)
-    expect(ranges[0].src.startsWith('blob:')).toBe(true)
+    expect(ranges[0].kind).toBe('inlineDataUrl')
+    if (ranges[0].kind === 'inlineDataUrl') {
+      expect(ranges[0].src.startsWith('blob:')).toBe(true)
+    }
   })
 
   it('同一行可存在多个行内图片', () => {
@@ -37,7 +57,7 @@ describe('scanDataUrlImageRanges', () => {
     expect(ranges[0].from).toBeLessThan(ranges[1].from)
   })
 
-  it('引用式 ![alt][id] 不在原文生成装饰（仅预览区渲染图）', () => {
+  it('引用式用法、定义行与行内 data 图区间并存', () => {
     const doc = docFromLines(
       '![图][ref]',
       '',
@@ -45,9 +65,25 @@ describe('scanDataUrlImageRanges', () => {
       '![](data:image/png;base64,YYYY)',
     )
     const ranges = scanDataUrlImageRanges(doc)
-    expect(ranges).toHaveLength(1)
-    expect(ranges[0].alt).toBe('')
-    expect(ranges[0].src).toContain('YYYY')
+    expect(ranges).toHaveLength(3)
+    const refUsage = ranges.find((r) => r.kind === 'refStyleUsage')
+    const refDef = ranges.find((r) => r.kind === 'refStyleDefinition')
+    const inline = ranges.find((r) => r.kind === 'inlineDataUrl')
+    expect(refUsage).toBeDefined()
+    if (refUsage?.kind === 'refStyleUsage') {
+      expect(refUsage.alt).toBe('图')
+      expect(refUsage.refId).toBe('ref')
+      expect(refUsage.src).toContain('XXXX')
+    }
+    expect(refDef).toBeDefined()
+    if (refDef?.kind === 'refStyleDefinition') {
+      expect(refDef.refId).toBe('ref')
+    }
+    expect(inline).toBeDefined()
+    if (inline?.kind === 'inlineDataUrl') {
+      expect(inline.alt).toBe('')
+      expect(inline.src).toContain('YYYY')
+    }
   })
 
   it('普通网络图片行不生成装饰区间', () => {
@@ -55,9 +91,20 @@ describe('scanDataUrlImageRanges', () => {
     expect(scanDataUrlImageRanges(doc)).toHaveLength(0)
   })
 
-  it('引用式 + 尖括号定义不产生装饰区间', () => {
+  it('尖括号引用定义与引用式用法', () => {
     const doc = docFromLines('![图][ref]', '', '[ref]: <data:image/png;base64,XXXX>')
-    expect(scanDataUrlImageRanges(doc)).toHaveLength(0)
+    const ranges = scanDataUrlImageRanges(doc)
+    expect(ranges).toHaveLength(2)
+    const refUsage = ranges.find((r) => r.kind === 'refStyleUsage')
+    const refDef = ranges.find((r) => r.kind === 'refStyleDefinition')
+    expect(refUsage).toBeDefined()
+    if (refUsage?.kind === 'refStyleUsage') {
+      expect(refUsage.src).toBe('data:image/png;base64,XXXX')
+    }
+    expect(refDef).toBeDefined()
+    if (refDef?.kind === 'refStyleDefinition') {
+      expect(refDef.refId).toBe('ref')
+    }
   })
 
   it('普通链接定义行不生成装饰区间', () => {

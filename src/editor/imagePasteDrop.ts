@@ -1,8 +1,5 @@
 import { EditorView } from '@codemirror/view'
 
-/** 引用标签前缀，仅含字母数字与连字符，避免与正文脚注冲突 */
-const IMAGE_REF_ID_PREFIX = 'md-img'
-
 /** 图片说明文字最大长度（避免过长文件名撑爆一行） */
 const IMAGE_ALT_MAX_LEN = 48
 
@@ -21,16 +18,6 @@ function readFileAsDataUrl(file: File): Promise<string> {
 }
 
 /**
- * 生成唯一的引用式图片 ID（用于 `![alt][id]` / `[id]: url`）。
- */
-function makeImageRefId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return `${IMAGE_REF_ID_PREFIX}-${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`
-  }
-  return `${IMAGE_REF_ID_PREFIX}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
-}
-
-/**
  * 将插入位置限制在合法区间。异步读完图片后文档可能已变短，沿用旧光标会触发 Invalid change range。
  */
 function clampDocPos(view: EditorView, pos: number): number {
@@ -41,41 +28,31 @@ function clampDocPos(view: EditorView, pos: number): number {
 }
 
 /**
- * 在指定位置插入引用式图片（短行正文 + 文末引用定义）。
- * 定义使用尖括号包裹目标地址，避免 URL 中含 `)` 等字符时 markdown-it 解析引用失败。
- * 使用单次全文替换生成新文档，保证仅一次 dispatch / 一次 v-model 同步，避免 vue-codemirror
- * 在两次 emit 之间用「仅有 ![alt][id]、无定义行」的中间态覆盖编辑器，导致预览无法解析引用图。
+ * 在光标处插入**单行**行内图片：`![alt](<data:...>)`。
+ * 地址放在尖括号内，避免 data URL 中含 `)` 时破坏 `](...)` 配对；整段在一行，一次删除即可移除整块，预览不会残留半截引用。
  *
- * @returns 插入正文后的光标位置（紧跟 `![alt][ref]` 块之后），便于连续插入多图。
+ * @returns 插入后光标应落在新片段末尾之后，便于连续插入多图。
  */
-function insertRefImageAt(view: EditorView, insertPos: number, dataUrl: string, rawAltBase: string): number {
+function insertInlineDataUrlImageAt(view: EditorView, insertPos: number, dataUrl: string, rawAltBase: string): number {
   const trimmedUrl = dataUrl.trim()
   if (!trimmedUrl) return clampDocPos(view, insertPos)
 
   const at = clampDocPos(view, insertPos)
   const rawAlt = (rawAltBase || 'image').replace(/]/g, '')
   const alt = rawAlt.length > IMAGE_ALT_MAX_LEN ? `${rawAlt.slice(0, IMAGE_ALT_MAX_LEN)}…` : rawAlt
-  const ref = makeImageRefId()
-  const body = `\n![${alt}][${ref}]\n`
-  const def = `\n[${ref}]: <${trimmedUrl}>\n`
-  const bodyLen = body.length
-
-  const len = view.state.doc.length
-  const before = view.state.sliceDoc(0, at)
-  const after = view.state.sliceDoc(at)
-  const newDoc = before + body + after + def
+  const snippet = `\n![${alt}](<${trimmedUrl}>)\n`
 
   view.dispatch({
-    changes: { from: 0, to: len, insert: newDoc },
-    selection: { anchor: at + bodyLen },
+    changes: { from: at, insert: snippet },
+    selection: { anchor: at + snippet.length },
     scrollIntoView: true,
   })
 
-  return at + bodyLen
+  return at + snippet.length
 }
 
 /**
- * 同一次粘贴中，剪贴板可能多次提供同一截图（等价 File），去重后再插入，避免正文/文末重复多段相同引用。
+ * 同一次粘贴中，剪贴板可能多次提供同一截图（等价 File），去重后再插入，避免重复插入多段相同图片。
  */
 export function dedupeImageFilesForPaste(files: File[]): File[] {
   const out: File[] = []
@@ -90,7 +67,7 @@ export function dedupeImageFilesForPaste(files: File[]): File[] {
 }
 
 /**
- * 将多个图片文件依次插入为引用式 Markdown。
+ * 将多个图片文件依次插入为单行行内 data URL 图。
  */
 async function insertMarkdownImages(
   view: EditorView,
@@ -104,7 +81,7 @@ async function insertMarkdownImages(
   for (const file of unique) {
     const dataUrl = await readFileAsDataUrl(file)
     cursor = clampDocPos(view, cursor)
-    cursor = insertRefImageAt(view, cursor, dataUrl, file.name || 'image')
+    cursor = insertInlineDataUrlImageAt(view, cursor, dataUrl, file.name || 'image')
   }
 }
 
@@ -165,7 +142,7 @@ export function imagePasteDropExtension() {
             event.preventDefault()
             event.stopImmediatePropagation()
             const pos = clampDocPos(view, view.state.selection.main.head)
-            insertRefImageAt(view, pos, src, altFromHtml || 'image')
+            insertInlineDataUrlImageAt(view, pos, src, altFromHtml || 'image')
             return true
           }
         }

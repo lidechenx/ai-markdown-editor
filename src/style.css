@@ -61,56 +61,45 @@ body {
   min-height: 100%;
 }
 
-.cm-editor .cm-md-inline-img {
-  display: inline-flex;
-  align-items: center;
-  vertical-align: middle;
-  max-width: 100%;
-  margin: 0 0.1rem;
-}
-
-.cm-editor .cm-md-inline-img img {
-  display: block;
-  max-height: 3.25rem;
-  max-width: min(100%, 10rem);
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  border-radius: 6px;
-  border: 1px solid color-mix(in srgb, var(--app-border) 80%, transparent);
-  background: var(--app-surface-2);
-}
-
-.cm-editor .cm-md-block-img {
+.cm-editor .cm-md-embed-chip {
   display: inline-flex;
   box-sizing: border-box;
-  max-width: 100%;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 0.75rem;
-  padding: 0.4rem 0.35rem;
-  margin: 0.15rem 0;
+  gap: 0.35rem;
+  max-width: min(100%, 28rem);
+  margin: 0.08rem 0.05rem;
+  padding: 0.18rem 0.42rem 0.18rem 0.32rem;
+  vertical-align: middle;
   border-radius: var(--app-radius-sm);
-  border: 1px dashed color-mix(in srgb, var(--app-accent) 35%, var(--app-border));
+  border: 1px dashed color-mix(in srgb, var(--app-accent) 30%, var(--app-border));
   background: color-mix(in srgb, var(--app-surface-2) 92%, transparent);
+  color: var(--app-fg);
 }
 
-.cm-editor .cm-md-block-img img {
-  display: block;
-  max-height: 7.5rem;
-  max-width: min(100%, 20rem);
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  border-radius: 8px;
-  border: 1px solid var(--app-border);
-  background: var(--app-surface);
+.cm-editor .cm-md-embed-chip--definition {
+  border-color: color-mix(in srgb, var(--app-muted) 40%, var(--app-border));
+  background: color-mix(in srgb, var(--app-surface-2) 88%, transparent);
 }
 
-.cm-editor .cm-md-block-img-label {
+.cm-editor .cm-md-embed-chip-icon {
+  flex-shrink: 0;
+  opacity: 0.88;
+  color: var(--app-accent);
+}
+
+.cm-editor .cm-md-embed-chip--definition .cm-md-embed-chip-icon {
+  color: var(--app-muted);
+}
+
+.cm-editor .cm-md-embed-chip-label {
+  min-width: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.72rem;
+  line-height: 1.35;
   color: var(--app-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sr-only {

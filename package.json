@@ -3,6 +3,24 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "license": "MIT",
+  "description": "Vue 3 + CodeMirror 6 的本地优先 Markdown 编辑器：实时预览、粘贴图片、语法速查与可选 AI 润色。",
+  "keywords": [
+    "markdown",
+    "markdown-editor",
+    "vue",
+    "codemirror",
+    "codemirror6",
+    "vite",
+    "typescript",
+    "markdown-it",
+    "wysiwyg",
+    "note-taking"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lidechenx/ai-markdown-editor.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",

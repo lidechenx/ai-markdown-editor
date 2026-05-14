@@ -20,6 +20,13 @@ describe('renderMarkdownToHtml', () => {
     expect(html).toContain('rel="noopener noreferrer"')
   })
 
+  it('行内尖括号包裹的 data URL 能渲染为 img', () => {
+    const md = '![](<data:image/png;base64,QQ>)'
+    const html = renderMarkdownToHtml(md)
+    expect(html).toContain('<img')
+    expect(html).toContain('data:image/png')
+  })
+
   it('支持引用式图片', () => {
     const md = '![示例][img1]\n\n[img1]: https://example.com/p.png'
     const html = renderMarkdownToHtml(md)
