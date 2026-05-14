@@ -31,7 +31,51 @@ function makeImageRefId(): string {
 }
 
 /**
- * 在光标处插入引用式图片（正文仅短行），Data URL 追加在文档末尾。
+ * 将插入位置限制在合法区间。异步读完图片后文档可能已变短，沿用旧光标会触发 Invalid change range。
+ */
+function clampDocPos(view: EditorView, pos: number): number {
+  const len = view.state.doc.length
+  if (pos < 0) return 0
+  if (pos > len) return len
+  return pos
+}
+
+/**
+ * 在指定位置插入引用式图片（短行正文 + 文末引用定义）。
+ * 定义使用尖括号包裹目标地址，避免 URL 中含 `)` 等字符时 markdown-it 解析引用失败。
+ * 使用单次全文替换生成新文档，保证仅一次 dispatch / 一次 v-model 同步，避免 vue-codemirror
+ * 在两次 emit 之间用「仅有 ![alt][id]、无定义行」的中间态覆盖编辑器，导致预览无法解析引用图。
+ *
+ * @returns 插入正文后的光标位置（紧跟 `![alt][ref]` 块之后），便于连续插入多图。
+ */
+function insertRefImageAt(view: EditorView, insertPos: number, dataUrl: string, rawAltBase: string): number {
+  const trimmedUrl = dataUrl.trim()
+  if (!trimmedUrl) return clampDocPos(view, insertPos)
+
+  const at = clampDocPos(view, insertPos)
+  const rawAlt = (rawAltBase || 'image').replace(/]/g, '')
+  const alt = rawAlt.length > IMAGE_ALT_MAX_LEN ? `${rawAlt.slice(0, IMAGE_ALT_MAX_LEN)}…` : rawAlt
+  const ref = makeImageRefId()
+  const body = `\n![${alt}][${ref}]\n`
+  const def = `\n[${ref}]: <${trimmedUrl}>\n`
+  const bodyLen = body.length
+
+  const len = view.state.doc.length
+  const before = view.state.sliceDoc(0, at)
+  const after = view.state.sliceDoc(at)
+  const newDoc = before + body + after + def
+
+  view.dispatch({
+    changes: { from: 0, to: len, insert: newDoc },
+    selection: { anchor: at + bodyLen },
+    scrollIntoView: true,
+  })
+
+  return at + bodyLen
+}
+
+/**
+ * 将多个图片文件依次插入为引用式 Markdown。
  */
 async function insertMarkdownImages(
   view: EditorView,
@@ -40,27 +84,11 @@ async function insertMarkdownImages(
 ): Promise<void> {
   if (!files.length) return
 
-  let cursor = insertPos
-
+  let cursor = clampDocPos(view, insertPos)
   for (const file of files) {
     const dataUrl = await readFileAsDataUrl(file)
-    const rawAlt = (file.name || 'image').replace(/]/g, '')
-    const alt = rawAlt.length > IMAGE_ALT_MAX_LEN ? `${rawAlt.slice(0, IMAGE_ALT_MAX_LEN)}…` : rawAlt
-    const ref = makeImageRefId()
-    const inline = `\n![${alt}][${ref}]\n`
-
-    view.dispatch({
-      changes: { from: cursor, insert: inline },
-      selection: { anchor: cursor + inline.length },
-      scrollIntoView: true,
-    })
-
-    const appendAt = view.state.doc.length
-    view.dispatch({
-      changes: { from: appendAt, insert: `\n[${ref}]: ${dataUrl}\n` },
-    })
-
-    cursor += inline.length
+    cursor = clampDocPos(view, cursor)
+    cursor = insertRefImageAt(view, cursor, dataUrl, file.name || 'image')
   }
 }
 
@@ -77,7 +105,7 @@ export function imagePasteDropExtension() {
       const fromFiles = cb.files?.length ? [...cb.files].filter((f) => f.type.startsWith('image/')) : []
       if (fromFiles.length) {
         event.preventDefault()
-        const pos = view.state.selection.main.head
+        const pos = clampDocPos(view, view.state.selection.main.head)
         void insertMarkdownImages(view, fromFiles, pos)
         return true
       }
@@ -92,9 +120,32 @@ export function imagePasteDropExtension() {
         }
         if (imageFiles.length) {
           event.preventDefault()
-          const pos = view.state.selection.main.head
+          const pos = clampDocPos(view, view.state.selection.main.head)
           void insertMarkdownImages(view, imageFiles, pos)
           return true
+        }
+      }
+
+      /** 部分环境仅提供 HTML（如从网页复制图片），从中提取 data:image 再插入 */
+      const html = cb.getData('text/html')
+      if (html) {
+        const tag = /<img\b[^>]*>/i.exec(html)
+        if (tag) {
+          const srcMatch =
+            /\bsrc\s*=\s*["']([^"']+)["']/i.exec(tag[0]) ?? /\bsrc\s*=\s*([^\s>]+)/i.exec(tag[0])
+          const src = srcMatch?.[1]?.trim()
+          if (
+            src &&
+            src.toLowerCase().startsWith('data:image/') &&
+            !src.toLowerCase().includes('image/svg+xml')
+          ) {
+            const altMatch = /\balt\s*=\s*["']([^"']*)["']/i.exec(tag[0])
+            const altFromHtml = altMatch?.[1]?.replace(/]/g, '')?.trim()
+            event.preventDefault()
+            const pos = clampDocPos(view, view.state.selection.main.head)
+            insertRefImageAt(view, pos, src, altFromHtml || 'image')
+            return true
+          }
         }
       }
 
@@ -113,8 +164,9 @@ export function imagePasteDropExtension() {
       const imgs = [...dt.files].filter((f) => f.type.startsWith('image/'))
       if (!imgs.length) return false
       event.preventDefault()
-      const pos =
+      const rawPos =
         view.posAtCoords({ x: event.clientX, y: event.clientY }, false) ?? view.state.selection.main.head
+      const pos = clampDocPos(view, rawPos)
       void insertMarkdownImages(view, imgs, pos)
       return true
     },

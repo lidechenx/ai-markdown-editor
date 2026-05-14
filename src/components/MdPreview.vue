@@ -35,6 +35,20 @@ const html = computed(() => renderMarkdownToHtml(props.source))
   border-radius: 0 0 var(--app-radius-sm) var(--app-radius-sm);
 }
 
+.md-preview-inner :deep(p) {
+  line-height: 1.65;
+  margin-block: 0.4em 0.65em;
+}
+
+.md-preview-inner :deep(img) {
+  max-width: 100%;
+  height: auto;
+  display: inline-block;
+  vertical-align: middle;
+  border-radius: 8px;
+  margin: 0.35rem 0;
+}
+
 @media (prefers-color-scheme: dark) {
   .md-preview-inner :deep(.hljs) {
     background: #0d1117;

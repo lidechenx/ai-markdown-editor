@@ -41,7 +41,7 @@ describe('scanDataUrlImageRanges', () => {
     expect(ranges[0].from).toBeLessThan(ranges[1].from)
   })
 
-  it('引用行与正文行互不干扰', () => {
+  it('引用式 ![alt][id] 与文末定义、行内图可同时识别', () => {
     const doc = docFromLines(
       '![图][ref]',
       '',
@@ -49,14 +49,24 @@ describe('scanDataUrlImageRanges', () => {
       '![](data:image/png;base64,YYYY)',
     )
     const ranges = scanDataUrlImageRanges(doc)
-    expect(ranges).toHaveLength(2)
-    expect(ranges[0].block).toBe(true)
-    expect(ranges[1].block).toBe(false)
+    expect(ranges).toHaveLength(3)
+    expect(ranges[0].block).toBe(false)
+    expect(ranges[0].alt).toBe('图')
+    expect(ranges[1].block).toBe(true)
+    expect(ranges[2].block).toBe(false)
   })
 
   it('普通网络图片行不生成装饰区间', () => {
     const doc = docFromLines('![](https://example.com/a.png)')
     expect(scanDataUrlImageRanges(doc)).toHaveLength(0)
+  })
+
+  it('识别尖括号包裹的 data URL 引用定义行', () => {
+    const doc = docFromLines('![图][ref]', '', '[ref]: <data:image/png;base64,XXXX>')
+    const ranges = scanDataUrlImageRanges(doc)
+    expect(ranges).toHaveLength(2)
+    expect(ranges[1].block).toBe(true)
+    expect(ranges[1].src).toBe('data:image/png;base64,XXXX')
   })
 
   it('普通链接定义行不生成装饰区间', () => {

@@ -11,44 +11,70 @@ import {
 /** 超过此长度的文档不再扫描装饰，避免卡顿 */
 const MAX_DOC_LENGTH_FOR_IMAGE_PREVIEW = 600_000
 
-/** 行首引用定义：`[id]: data:...` 或 `[id]: blob:...` */
-const REF_IMAGE_LINE = /^\[([^\]]+)\]:\s*((?:data|blob):.+)$/
+/** 行首引用定义：`[id]: data:...`、`[id]: <data:...>` 或 blob 形式（整行） */
+const REF_DEF_LINE =
+  /^\[([^\]]+)\]:\s*(?:<((?:data|blob):[^>\n]+)>|((?:data|blob):.+))$/
 
 /** 行内图片：`![](data:...)` 或 `![](blob:...)` */
 const INLINE_DATA_IMAGE = /!\[([^\]]*)\]\(((?:data|blob):[^)]+)\)/g
+
+/** 引用式图片：`![任意文字][引用id]`（id 对应文末 data/blob 定义） */
+const REF_STYLE_IMAGE = /!\[([^\]]*)\]\[([^\]]+)\]/g
 
 export type DataUrlImageRange = {
   from: number
   to: number
   src: string
   alt: string
+  /** 是否为整行引用定义（仅影响 DOM/CSS，装饰器本身不可为 block，见 ViewPlugin 限制） */
   block: boolean
 }
 
 /**
- * 扫描文档中需要用图片预览替换的 Markdown 片段（行内 data/blob URL、整行引用定义）。
+ * 收集全文中的 `[id]: data:...` / `[id]: blob:...` 定义，供引用式图片 `![alt][id]` 解析。
+ */
+function collectImageRefDefinitions(doc: Text): Map<string, string> {
+  const map = new Map<string, string>()
+  for (let i = 1; i <= doc.lines; i++) {
+    const raw = doc.line(i).text
+    const t = raw.replace(/\s+$/, '')
+    const m = REF_DEF_LINE.exec(t)
+    if (m) {
+      const url = (m[2] ?? m[3] ?? '').trim()
+      map.set(m[1], url)
+    }
+  }
+  return map
+}
+
+/**
+ * 扫描文档中需要用图片预览替换的 Markdown 片段（行内 data/blob、引用式图片、文末定义行）。
  */
 export function scanDataUrlImageRanges(doc: Text): DataUrlImageRange[] {
+  const refDefs = collectImageRefDefinitions(doc)
   const out: DataUrlImageRange[] = []
 
   for (let i = 1; i <= doc.lines; i++) {
     const line = doc.line(i)
-    const t = line.text
-    const ref = REF_IMAGE_LINE.exec(t)
-    if (ref) {
+    const text = line.text
+    const trimmed = text.replace(/\s+$/, '')
+
+    const defMatch = REF_DEF_LINE.exec(trimmed)
+    if (defMatch) {
+      const src = (defMatch[2] ?? defMatch[3] ?? '').trim()
       out.push({
         from: line.from,
         to: line.to,
-        src: ref[2].trim(),
-        alt: ref[1],
+        src,
+        alt: defMatch[1],
         block: true,
       })
       continue
     }
 
-    const re = new RegExp(INLINE_DATA_IMAGE.source, 'g')
     let m: RegExpExecArray | null
-    while ((m = re.exec(t)) !== null) {
+    const inlineRe = new RegExp(INLINE_DATA_IMAGE.source, 'g')
+    while ((m = inlineRe.exec(text)) !== null) {
       out.push({
         from: line.from + m.index,
         to: line.from + m.index + m[0].length,
@@ -56,6 +82,21 @@ export function scanDataUrlImageRanges(doc: Text): DataUrlImageRange[] {
         alt: m[1] ?? '',
         block: false,
       })
+    }
+
+    const refImgRe = new RegExp(REF_STYLE_IMAGE.source, 'g')
+    while ((m = refImgRe.exec(text)) !== null) {
+      const id = m[2]
+      const url = refDefs.get(id)
+      if (url && (url.startsWith('data:') || url.startsWith('blob:'))) {
+        out.push({
+          from: line.from + m.index,
+          to: line.from + m.index + m[0].length,
+          src: url,
+          alt: m[1] ?? '',
+          block: false,
+        })
+      }
     }
   }
 
@@ -79,7 +120,8 @@ class DataUrlImageWidget extends WidgetType {
   }
 
   toDOM(): HTMLElement {
-    const wrap = document.createElement(this.block ? 'div' : 'span')
+    /** 必须使用行内容器：ViewPlugin 提供的 replace 装饰禁止使用 block: true */
+    const wrap = document.createElement('span')
     wrap.className = this.block ? 'cm-md-block-img' : 'cm-md-inline-img'
     wrap.setAttribute('data-md-img-preview', 'true')
 
@@ -123,7 +165,8 @@ function buildDecorationSet(view: EditorView): DecorationSet {
   for (const r of ranges) {
     const deco = Decoration.replace({
       widget: new DataUrlImageWidget(r.src, r.alt, r.block),
-      block: r.block,
+      /** ViewPlugin 装饰禁止 block: true，否则抛出 RangeError 并连带文档布局崩溃 */
+      block: false,
     })
     builder.add(r.from, r.to, deco)
   }

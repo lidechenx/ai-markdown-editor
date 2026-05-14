@@ -16,6 +16,24 @@ function escapeHtml(raw: string): string {
 }
 
 /**
+ * 校验链接是否允许写入 HTML（覆盖 markdown-it 默认实现）。
+ * 默认仅放行 `data:image/(gif|png|jpeg|webp);`，浏览器截图常见 `jpg`、`bmp`、`avif` 等会被拒绝，
+ * 导致引用式图片 `[id]: data:...` 整段解析失败，预览里只剩 `![alt][id]` 纯文本。
+ */
+function validateMdLink(url: string): boolean {
+  const raw = url.trim()
+  const s = raw.toLowerCase()
+  if (s.startsWith('blob:')) return true
+  if (s.startsWith('data:image/')) {
+    if (/\bdata:image\/svg\+xml\b/i.test(raw)) return false
+    return /^data:image\/[\w.+-]+;/i.test(raw)
+  }
+  if (s.startsWith('data:')) return false
+  if (/^(vbscript|javascript|file):/i.test(s)) return false
+  return true
+}
+
+/**
  * 创建配置好的 MarkdownIt 实例（代码高亮、外链安全属性）。
  */
 function createRenderer(): MarkdownIt {
@@ -23,6 +41,8 @@ function createRenderer(): MarkdownIt {
     html: false,
     linkify: true,
     typographer: true,
+    /** 单个换行转为 <br>，与常见笔记软件行为一致，便于「原文换行 = 预览换行」 */
+    breaks: true,
     highlight(code: string, lang: string) {
       if (lang && hljs.getLanguage(lang)) {
         try {
@@ -34,6 +54,8 @@ function createRenderer(): MarkdownIt {
       return escapeHtml(code)
     },
   })
+
+  md.validateLink = validateMdLink
 
   const defaultRender: NonNullable<typeof md.renderer.rules.link_open> =
     md.renderer.rules.link_open ??

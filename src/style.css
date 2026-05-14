@@ -82,7 +82,9 @@ body {
 }
 
 .cm-editor .cm-md-block-img {
-  display: flex;
+  display: inline-flex;
+  box-sizing: border-box;
+  max-width: 100%;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 0.75rem;
